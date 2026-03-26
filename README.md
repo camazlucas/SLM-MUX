@@ -1,229 +1,185 @@
 # SLM-MUX: Orchestrating Small Language Models for Reasoning
 
-This repository contains the implementation code for the SLM-MUX method, which effectively orchestrates multiple small language models (SLMs) to achieve superior reasoning performance.
+**Training-free, confidence-based multi-model routing at inference time.**
 
-## 📁 Project Structure
+[![ICLR 2026](https://img.shields.io/badge/ICLR-2026-blue.svg)](https://openreview.net/)
+[![arXiv](https://img.shields.io/badge/arXiv-2510.05077-b31b1b.svg)](https://arxiv.org/abs/2510.05077)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+SLM-MUX routes each query to the best small language model (SLM) in a pool by
+generating multiple samples from each model, estimating per-model confidence,
+and selecting the most confident model's answer. The method is **training-free**
+-- it requires no fine-tuning of the underlying language models, only
+collaboration data from multiple models at inference time.
+
+## Key Results
+
+On MATH-500 with 5 SLMs and k=5 samples per model:
+
+| Method | Accuracy |
+|--------|----------|
+| Best single SLM (Mistral-Small-24B) | 74.0% |
+| Average single SLM | 71.3% |
+| **SLM-MUX (Consistency Confidence)** | **79.2%** |
+| Oracle (upper bound) | 87.2% |
+
+SLM-MUX also supports open-ended benchmarks (IFEval, HumanEval) using
+embedding-based confidence scoring.
+
+## How It Works
 
 ```
-slm_mux_code/
-├── slm_mux_orchestrator/ # Stage 2: SLM-MUX Orchestration
-│   ├── math_benchmark.py
-│   ├── gpqa_benchmark.py
-│   └── gsm8k_benchmark.py
-├── single_model_inference/ # Stage 1: Single Model Inference
-│   ├── collect_math.py
-│   ├── collect_gpqa.py
-│   └── collect_gsm8k.py
-├── data/
-├── evaluation/
-├── utils/
-├── config/
-├── requirements.txt
-└── README.md
+          ┌──────────┐
+  Query ──┤          ├── k samples ──► Confidence ──┐
+          │  Model 1 │                   Score       │
+          └──────────┘                               │
+          ┌──────────┐                               │   ┌──────────┐
+  Query ──┤          ├── k samples ──► Confidence ───┼──►│  Select  │──► Answer
+          │  Model 2 │                   Score       │   │  Highest │
+          └──────────┘                               │   └──────────┘
+          ┌──────────┐                               │
+  Query ──┤          ├── k samples ──► Confidence ──┘
+          │  Model N │                   Score
+          └──────────┘
 ```
 
-## 🚀 Quick Start
+**Algorithm:**
+1. For each query, generate *k* samples independently from each model
+2. Evaluate per-model confidence using a chosen method
+3. Select the model with the highest confidence
+4. Return that model's selected answer
 
-### 1. Installation
+## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/slm-mux/slm-mux.github.io.git
-cd slm-mux.github.io/slm_mux_code
+pip install -e .
 
-# Install dependencies
-pip install -r requirements.txt
+# With optional dependencies (embedding models, language detection, etc.)
+pip install -e ".[all]"
 ```
 
-### 2. Configuration
+## Quick Start
 
-Set up your API keys as environment variables:
+### 1. Configure your models
+
+```yaml
+# configs/together.yaml
+providers:
+  - name: together
+    type: together
+    api_key_env: TOGETHER_API_KEY
+
+models:
+  - id: "Qwen/Qwen2.5-7B-Instruct-Turbo"
+    provider: together
+  - id: "mistralai/Mistral-Small-24B-Instruct-2501"
+    provider: together
+  - id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+    provider: together
+
+benchmark:
+  name: math500
+  dataset_path: data/math_500.json
+
+mux:
+  samples_per_model: 5
+  temperature: 0.3
+```
+
+### 2. Collect samples
 
 ```bash
-export TOGETHER_API_KEY="your_together_api_key"
-export OPENAI_API_KEY="your_openai_api_key"  # Optional, for verification
+# Collect k=5 samples per model per question
+slm-mux collect --config configs/together.yaml
 ```
 
-### 3. Run SLM-MUX (Main Workflow)
-
-**Example: Run SLM-MUX on MATH with 2 models**
-```bash
-python slm_mux_orchestrator/math_benchmark.py \
-    --data_path data/math_500.json \
-    --output results/math_slmmux_results.json \
-    --models \
-        "mistralai/Mistral-7B-Instruct-v0.3" \
-        "Qwen/Qwen2.5-7B-Instruct" \
-    --extra_calls 3
-```
-
-**Example: Run SLM-MUX on GPQA**
-```bash
-python slm_mux_orchestrator/gpqa_benchmark.py \
-    --data_path data/gpqa_shuffled.json \
-    --output results/gpqa_slmmux_results.json \
-    --models \
-        "mistralai/Mistral-7B-Instruct-v0.3" \
-        "Qwen/Qwen2.5-7B-Instruct" \
-    --extra_calls 3
-```
-
-**Example: Run SLM-MUX on GSM8K**
-```bash
-python slm_mux_orchestrator/gsm8k_benchmark.py \
-    --data_path data/gsm8k_500.json \
-    --output results/gsm8k_slmmux_results.json \
-    --models \
-        "mistralai/Mistral-7B-Instruct-v0.3" \
-        "Qwen/Qwen2.5-7B-Instruct" \
-    --extra_calls 3
-```
-
-This will:
-1. Query all specified models for each problem
-2. Run each model multiple times (controlled by `--extra_calls`)
-3. Apply the SLM-MUX algorithm to select the best answer
-4. Save results with accuracy metrics
-
-### 4. Optional: Run Single Model Inference (For Comparison)
-
-If you want baseline performance for a single model:
+### 3. Run offline MUX evaluation
 
 ```bash
-python single_model_inference/collect_math.py \
-    --dataset data/math_500.json \
-    --model "mistralai/Mistral-7B-Instruct-v0.3" \
-    --output collected_outputs/math_mistral7b_baseline.json \
-    --num_llm_sub_iterations 3
+# Evaluate with confidence-based routing
+slm-mux offline \
+    --benchmark math500 \
+    --data-dir results/ \
+    --models Qwen/Qwen2.5-7B-Instruct-Turbo mistralai/Mistral-Small-24B-Instruct-2501 \
+    --samples 5 \
+    --trials 10
 ```
 
-**Note:** This is optional and only needed for comparison with single-model baselines.
-
-## 📊 Understanding the Results
-
-Each benchmark script outputs a JSON file containing:
-- Individual model responses and extracted answers
-- Vote counts for each unique answer
-- Selected final answer based on confidence
-- Token usage statistics
-- Overall accuracy
-
-Example output structure:
-```json
-{
-    "problem_id": "...",
-    "problem": "...",
-    "reference_answer": "...",
-    "models": [
-        {
-            "model_name": "...",
-            "calls": [...],
-            "best_answer": "...",
-            "confidence": 0.67
-        }
-    ],
-    "final_answer": "...",
-    "is_correct": true
-}
-```
-
-## 🔧 Optional: Single Model Baseline Collection
-
-The `single_model_inference/` directory contains scripts for collecting single-model baseline performance. **This is optional and only needed for comparison purposes.**
+### 4. Search for the best model combination
 
 ```bash
-# Example: Collect MATH responses from a single model
-python single_model_inference/collect_math.py \
-    --dataset data/math_500.json \
-    --model "mistralai/Mistral-7B-Instruct-v0.3" \
-    --output collected_outputs/math_mistral7b_baseline.json \
-    --num_llm_sub_iterations 3
+slm-mux search \
+    --benchmark math500 \
+    --data-dir results/ \
+    --k-min 2 --k-max 5
 ```
 
-This is useful for comparing SLM-MUX results against individual model performance.
+## Supported Benchmarks
 
-## 🧪 Answer Equivalence Checking
+| Benchmark | Type | Scoring | Default Confidence |
+|-----------|------|---------|-------------------|
+| **MATH-500** | Math reasoning | Exact match | Consistency |
+| **GSM8K** | Grade school math | Exact match | Consistency |
+| **GPQA** | Graduate-level MCQA | Multiple choice | Consistency |
+| **IFEval** | Instruction following | Deterministic constraint verification | Embedding |
+| **HumanEval** | Code generation | Execution-based pass@k | Embedding |
 
-For MATH and GSM8K, we provide scripts to verify answer equivalence using GPT-4o:
+Benchmark-specific defaults (confidence method, temperature) are automatically
+applied -- just specify the benchmark name and the best-known parameters are
+used out of the box.
 
-```bash
-# Check MATH answers
-python evaluation/check_equivalence_math.py \
-    --results results/math_results.json \
-    --output results/math_verified.json
+## Confidence Methods
 
-# Check GSM8K answers
-python evaluation/check_equivalence_gsm8k.py \
-    --results results/gsm8k_results.json \
-    --output results/gsm8k_verified.json
+| Method | Description | Best For |
+|--------|-------------|----------|
+| **Consistency** | Majority vote over *k* extracted answers | Exact-answer tasks (math, MCQA) |
+| **Embedding Similarity** | Cluster responses in embedding space | Open-ended generation (IFEval, code) |
+| **Hidden State Probe** | Train MLP on intermediate activations (SAPLMA) | When model internals are accessible |
+| **Verbalized** | Ask the model to self-report confidence | Quick estimation |
+| **Log-Probability** | Token-level log-probs | When logprobs are available |
+| **Reward Model** | External reward model scoring | When a reward model is available |
+| **Learned Router** | Pre-trained classifier | When routing training data exists |
+
+## Supported Providers
+
+Tested in our experiments:
+- **Together AI** -- serverless API
+- **vLLM** -- local OpenAI-compatible servers
+
+Also supported (OpenAI-compatible interface, not yet validated in experiments):
+- **LMDeploy** -- local TurboMind servers
+- **SGLang** -- local SGLang servers
+- **OpenAI** -- OpenAI API
+- **Google Gemini** -- Gemini API
+- **HuggingFace Endpoints** -- HF Inference Endpoints
+
+## Project Structure
+
+```
+src/slm_mux/
+├── engine/         # Core MUX algorithm (live + offline simulation)
+├── confidence/     # 7 confidence evaluation methods
+├── benchmarks/     # MATH-500, GSM8K, GPQA, IFEval, HumanEval
+├── providers/      # LLM provider backends
+├── extractors/     # Answer extraction (LaTeX, numeric, MCQA, code)
+├── config/         # YAML config loading + per-benchmark defaults
+├── evaluation/     # Metrics and LLM-based judging
+├── data/           # Dataset loaders
+└── cli/            # Command-line interface
 ```
 
-## 📝 Key Components
-
-### SLM-MUX Algorithm (`slm_mux_orchestrator/`)
-
-The core of SLM-MUX involves:
-
-1. **Multiple Sampling**: Each model generates multiple responses (controlled by `--extra_calls`)
-2. **Confidence Estimation**: Count the frequency of each unique answer
-3. **Model Selection**: Choose the answer with highest confidence across models
-4. **Tie Breaking**: Use validation set performance when confidence scores tie
-
-### Single Model Inference (`single_model_inference/`) - Optional
-
-These scripts are **optional** and used for baseline comparison:
-- Collect responses from a single model for performance benchmarking
-- Generate prompts for each problem
-- Call the specified model via the Together API
-- Save raw responses and token usage for analysis
-
-### Answer Extraction (`utils/`)
-
-Each dataset has specialized answer extraction logic:
-- **MATH**: Extracts content within `\boxed{...}` and normalizes LaTeX
-- **GPQA**: Uses multiple choice extraction (A/B/C/D)
-- **GSM8K**: Extracts numerical answers with ####
-
-### API Integration
-
-The `api_client.py` supports:
-- Together AI API for running open-source models
-- OpenAI API for verification (optional)
-- Automatic retry with exponential backoff
-- Token usage tracking
-
-## 🤝 Contributing
-
-When contributing code, please:
-1. Follow the existing code style (PEP 8)
-2. Add type hints to function signatures
-3. Include docstrings for public functions
-4. Update README if adding new features
-
-## 📄 License
-
-This code is released under the MIT License. See LICENSE file for details.
-
-## 📚 Citation
-
-If you use this code in your research, please cite:
+## Citation
 
 ```bibtex
-@article{slm-mux-2025,
+@article{wang2025slm,
   title={SLM-MUX: Orchestrating Small Language Models for Reasoning},
   author={Wang, Chenyu and Wan, Zishen and Kang, Hao and Chen, Emma and Xie, Zhiqiang and Krishna, Tushar and Reddi, Vijay Janapa and Du, Yilun},
+  journal={arXiv preprint arXiv:2510.05077},
   year={2025}
 }
 ```
 
-## 🔗 Links
+## License
 
-- **Project Page**: https://slm-mux.github.io
-- **Paper**: [Under Review]
-- **GitHub**: https://github.com/slm-mux/SLM-MUX
-
-## 📧 Contact
-
-For questions or issues, please:
-- Open an issue on GitHub
-- Contact: ydu@seas.harvard.edu
+MIT
