@@ -1,0 +1,115 @@
+# Pool de modelos de até 10B para os experimentos de multiagentes numa RTX 3090 (24 GB).
+# Todos cabem em bf16, um por vez (8B em bf16 ~ 16 GB de pesos; 9,7B ~ 19,3 GB).
+# Modelos acima de ~9B deixam pouco espaço para o cache KV: usam gpu_memory_utilization
+# maior (campo opcional abaixo) e rodam com menos requisições simultâneas.
+#
+# revision = commit do modelo no Hugging Face, conferido em 2026-11-16.
+# scripts/serve_vllm.sh lê este arquivo e sobe o modelo nessa revisão exata,
+# para que a reprodução não mude se o autor atualizar os pesos.
+#
+# Grupos:
+#   paper       -> a dupla usada na Reprodução 1 (SLM-MUX reporta Llama-8B + Qwen-7B no MATH)
+#   especialista-> ajustados para um domínio (servem para benchmarks de matemática e código)
+#   nova-geracao-> generalistas mais recentes
+#   raciocinio  -> geram cadeia de raciocínio longa (mais tokens por resposta)
+#   pequeno     -> 3,8-4,7B, para medir o efeito do tamanho
+#   teto-10b    -> 8,8-9,7B, entraram quando o teto subiu de 8B para 10B
+
+models:
+  - id: meta-llama/Llama-3.1-8B-Instruct
+    revision: 0e9e39f249a16976918f6564b8830bc894c89659
+    params_b: 8.03
+    license: llama3.1
+    gated: true          # aceitar a licença na página do modelo antes de baixar
+    group: paper
+    repro_1: true
+
+  - id: Qwen/Qwen2.5-7B-Instruct
+    revision: a09a35458c702b33eeacc393d103063234e8bc28
+    params_b: 7.62
+    license: apache-2.0
+    gated: false
+    group: paper
+    repro_1: true
+
+  - id: Qwen/Qwen2.5-Math-7B-Instruct
+    revision: ef9926d75ab1d54532f6a30dd5e760355eb9aa4d
+    params_b: 7.62
+    license: apache-2.0
+    gated: false
+    group: especialista
+    notes: especialista em matemática (GSM8K, MATH)
+
+  - id: Qwen/Qwen2.5-Coder-7B-Instruct
+    revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
+    params_b: 7.62
+    license: apache-2.0
+    gated: false
+    group: especialista
+    notes: especialista em código (HumanEval, SWE-bench)
+
+  - id: Qwen/Qwen3-8B
+    revision: b968826d9c46dd6066d109eabc6255188de91218
+    params_b: 8.19
+    license: apache-2.0
+    gated: false
+    group: nova-geracao
+    notes: modo de raciocínio (thinking) ligado por padrão; decidir se desliga antes de coletar
+
+  - id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+    revision: 916b56a44061fd5cd7d6a8fb632557ed4f724f60
+    params_b: 7.62
+    license: mit
+    gated: false
+    group: raciocinio
+    notes: respostas longas; precisa de max_tokens e max-model-len maiores
+
+  - id: microsoft/Phi-4-mini-instruct
+    revision: cfbefacb99257ffa30c83adab238a50856ac3083
+    params_b: 3.84
+    license: mit
+    gated: false
+    group: pequeno
+
+  - id: Qwen/Qwen3.5-4B
+    revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+    params_b: 4.66
+    license: apache-2.0
+    gated: false
+    group: pequeno
+    notes: arquitetura multimodal (texto + imagem); usar só texto
+
+  - id: Qwen/Qwen3.5-9B
+    revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    params_b: 9.65
+    license: apache-2.0
+    gated: false
+    group: teto-10b
+    gpu_memory_utilization: 0.95
+    notes: maior do pool; ~19,3 GB de pesos, sobra pouco para o cache KV; multimodal, usar só texto
+
+  - id: mistralai/Ministral-3-8B-Instruct-2512-BF16
+    revision: f6fae9795746f63c9be8344932f01275f3c63734
+    params_b: 8.92
+    license: apache-2.0
+    gated: false
+    group: teto-10b
+    notes: versão BF16 (a versão padrão vem em FP8); inclui encoder de visão, usar só texto
+
+  - id: ibm-granite/granite-4.2-8b
+    revision: a7042144125ce5ae64f89610e8289647fc000b9a
+    params_b: 8.79
+    license: apache-2.0
+    gated: false
+    group: teto-10b
+    notes: raciocínio e tool-calling (útil para benchmarks de agentes)
+
+  - id: google/gemma-4-E4B-it
+    revision: 4ecc2ba63bcac23ba4a767fc87025b1450f84c9c
+    params_b: 8.00
+    license: apache-2.0
+    gated: false
+    group: pequeno
+    notes: ~4,5B efetivos (o resto são embeddings por camada); any-to-any, conferir suporte no vLLM
+
+# Fora do pool: acima do teto de 10B (ex.: gemma-4-12B-it, Ministral-3-14B).
