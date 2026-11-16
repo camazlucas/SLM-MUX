@@ -21,11 +21,13 @@ def extract_answer_gsm(text: str) -> str:
     if text is None:
         return ""
     # Take the last occurrence of #### to be safe
-    matches = list(re.finditer(r"####\s*([-]?\d+(?:\.\d+)?)", text))
+    # [repro-gsm8k-8b] aceita separador de milhar e "$": o regex original lia "#### 1,000" como "1"
+    num = r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?"
+    matches = list(re.finditer(r"####\s*\$?\s*(" + num + r")", text))
     if matches:
         return matches[-1].group(1)
     # Fallback: last standalone number
-    nums = re.findall(r"[-]?\d+(?:\.\d+)?", text)
+    nums = re.findall(num, text)
     return nums[-1] if nums else ""
 
 
@@ -37,6 +39,9 @@ def normalize_answer_gsm(ans: str) -> str:
     if ans.startswith("####"):
         ans = ans[4:].strip()
     ans = ans.replace(",", "")
+    # [repro-gsm8k-8b] "18.00" e "18" são a mesma resposta
+    if re.fullmatch(r"-?\d+\.0+", ans):
+        ans = ans.split(".")[0]
     # Remove leading zeros (but keep a single zero)
     if re.fullmatch(r"0+", ans):
         return "0"
