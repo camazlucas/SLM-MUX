@@ -6,7 +6,9 @@ infraestrutura (dados, extração, tokens) que será reaproveitada nos Cenários
 - Paper: SLM-MUX (Wang et al., ICLR 2026, arXiv 2510.05077)
 - Modelos: `meta-llama/Llama-3.1-8B-Instruct` + `Qwen/Qwen2.5-7B-Instruct` (bf16, um por vez)
 - Benchmark: GSM8K teste (1.319) + validação de 500 questões do treino
-- Configuração do paper (Seção 4.2): k = 3 amostras, temperatura 0,3, desempate pela acurácia de validação
+- Configuração do paper: k = 3 amostras a temperatura 0,3 (Seção 4.2); desempate pela acurácia
+  na validação, coletada com 3 × 3 gerações a temperatura 0,5 (Seção 4.3); modelo sozinho em
+  decodificação greedy (Apêndice B.2)
 
 Documentação completa (objetivo, decisões, desvios, resultados):
 [Reprodução 1 — SLM-MUX no GSM8K](https://claude.ai/artifact/M4FoKEE5tHzZXscWFejRYA).
@@ -66,14 +68,16 @@ Para cada modelo (use `tmux`: uma janela serve, outra coleta):
 bash scripts/serve_vllm.sh Qwen/Qwen2.5-7B-Instruct
 
 # janela 2 (quando o servidor disser que está pronto)
-slm-mux collect --config configs/vllm_3090_gsm8k_val.yaml  --models Qwen/Qwen2.5-7B-Instruct
-slm-mux collect --config configs/vllm_3090_gsm8k_test.yaml --models Qwen/Qwen2.5-7B-Instruct
+slm-mux collect --config configs/vllm_3090_gsm8k_val.yaml         --models Qwen/Qwen2.5-7B-Instruct
+slm-mux collect --config configs/vllm_3090_gsm8k_test.yaml        --models Qwen/Qwen2.5-7B-Instruct
+slm-mux collect --config configs/vllm_3090_gsm8k_test_greedy.yaml --models Qwen/Qwen2.5-7B-Instruct
 
 # derrube o servidor (Ctrl+C na janela 1) e repita com meta-llama/Llama-3.1-8B-Instruct
 ```
 
-Saída: `results/gsm8k_{val,test}/<modelo>.json`, com 5 amostras por questão,
-resposta bruta, resposta extraída e tokens de cada amostra.
+Saída: `results/gsm8k_val/` (9 amostras a 0,5), `results/gsm8k_test/` (5 amostras a 0,3) e
+`results/gsm8k_test_greedy/` (1 amostra greedy), um JSON por modelo, com resposta bruta,
+resposta extraída e tokens de cada amostra.
 
 Antes da coleta completa, faça um teste de fumaça: `sample_size: 20` no config de validação,
 colete com um modelo e confira nas respostas brutas se o `####` aparece. Depois volte para `-1`.
@@ -83,12 +87,14 @@ colete com um modelo e confira nas respostas brutas se o `####` aparece. Depois 
 ```bash
 python scripts/offline_mux_alg1.py \
   --test-dir results/gsm8k_test --val-dir results/gsm8k_val \
+  --greedy-dir results/gsm8k_test_greedy \
   --models meta-llama/Llama-3.1-8B-Instruct,Qwen/Qwen2.5-7B-Instruct \
   --samples 3 --trials 10
 ```
 
 Reporta, com média ± desvio em 10 rodadas de Monte Carlo (subamostrando 3 das 5 amostras):
-`mux`, `oracle`, `single::<modelo>`, `sc3::<modelo>` e tokens por questão de cada método.
+`mux`, `oracle`, `greedy::<modelo>` (Single-Best do paper), `single::<modelo>`, `sc3::<modelo>`
+(Single-Best-SC) e tokens por questão de cada método.
 
 ## Desvios em relação ao repositório original (registrar no relatório)
 
@@ -101,8 +107,9 @@ Reporta, com média ± desvio em 10 rodadas de Monte Carlo (subamostrando 3 das 
    (o original lia `#### 1,000` como `1`) e trata `18.00` como `18`.
 3. **Dados**: o repositório não traz script de preparo; `scripts/prepare_gsm8k.py` grava só o
    número final em `answer`.
-4. **Acurácia de validação** = acurácia média de uma amostra isolada nas 500 questões.
-5. **`single`** usa uma amostra com temperatura 0,3, não decodificação greedy.
+4. **Acurácia de validação** = acurácia média das 9 amostras (3 × 3 a temperatura 0,5) nas 500
+   questões. O paper descreve a coleta (Seção 4.3), mas não dá a fórmula.
+5. **`single`** (uma amostra a 0,3) é um extra; o baseline do paper é o `greedy`.
 
 ## Próximos passos
 
