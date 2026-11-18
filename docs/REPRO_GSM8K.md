@@ -28,14 +28,18 @@ com a fração de memória da GPU definida para ele.
 |---|---|
 | paper (Reprodução 1) | Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct |
 | especialista | Qwen2.5-Math-7B-Instruct, Qwen2.5-Coder-7B-Instruct |
-| nova geração | Qwen3-8B (thinking ligado por padrão) |
-| raciocínio | DeepSeek-R1-Distill-Qwen-7B (respostas longas: suba com `max_model_len` maior) |
+| nova geração | Qwen3-8B, com raciocínio desligado (`enable_thinking: false`) |
+| raciocínio | DeepSeek-R1-Distill-Qwen-7B; `Qwen/Qwen3-8B-thinking`, variante do Qwen3-8B com raciocínio ligado (contexto de 32.768, sem coleta greedy) |
 | pequeno | Phi-4-mini-instruct (3,8B), Qwen3.5-4B, Gemma 4 E4B (~4,5B efetivos) |
 | teto 10B | Qwen3.5-9B, Ministral-3-8B (BF16), Granite 4.2 8B |
 
 O Qwen3.5-9B (~19,3 GB de pesos em bf16) deixa pouco espaço para o cache KV na 3090:
 sobe com `gpu_memory_utilization: 0.95` e aguenta menos requisições simultâneas. Se der falta de
 memória, reduza `num_workers` no config ou o `max_model_len`.
+
+Variantes de um mesmo modelo (como `Qwen/Qwen3-8B-thinking`) usam `hf_id` no pool e `served_model`,
+`chat_template_kwargs` e `max_tokens` no registro de servidores; o provider do vLLM repassa esses
+campos em cada requisição.
 
 Para acrescentar um modelo: inclua no `model_pool.yaml`, nos dois configs `vllm_3090_gsm8k_*.yaml`
 e no `slurm/vllm_servers.json`.
