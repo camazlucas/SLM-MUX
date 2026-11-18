@@ -3,6 +3,17 @@
 # Modelos acima de ~9B deixam pouco espaço para o cache KV: usam gpu_memory_utilization
 # maior (campo opcional abaixo) e rodam com menos requisições simultâneas.
 #
+# Origem da lista (campo `source` em cada modelo):
+#   - paper SLM-MUX (Wang et al., ICLR 2026, arXiv 2510.05077): pool de candidatos (Seção 4.3)
+#     e modelos especialistas (Apêndices E.1 e E.3)
+#   - ToolOrchestra (arXiv 2511.21689): especialista de matemática
+#   - comparações de SLMs de 2026, pesquisadas em 2026-11-16:
+#       labellerr  = https://www.labellerr.com/blog/best-small-language-models-under-10b-parameters/
+#       vdf        = https://vdf.ai/blog/best-small-language-models/
+# revision, params_b e license vêm da API do Hugging Face (huggingface.co/api/models/<id>),
+# consultada em 2026-11-16. Critérios: cabe numa RTX 3090 em bf16 (até 10B) e cobre
+# geração, especialização, raciocínio longo e tamanho.
+#
 # revision = commit do modelo no Hugging Face, conferido em 2026-11-16.
 # scripts/serve_vllm.sh lê este arquivo e sobe o modelo nessa revisão exata,
 # para que a reprodução não mude se o autor atualizar os pesos.
@@ -18,6 +29,7 @@
 models:
   - id: meta-llama/Llama-3.1-8B-Instruct
     revision: 0e9e39f249a16976918f6564b8830bc894c89659
+    source: paper SLM-MUX, pool de candidatos (Seção 4.3) e dupla da Tabela 2
     params_b: 8.03
     license: llama3.1
     gated: true          # aceitar a licença na página do modelo antes de baixar
@@ -26,6 +38,7 @@ models:
 
   - id: Qwen/Qwen2.5-7B-Instruct
     revision: a09a35458c702b33eeacc393d103063234e8bc28
+    source: paper SLM-MUX, pool de candidatos (Seção 4.3) e dupla da Tabela 2
     params_b: 7.62
     license: apache-2.0
     gated: false
@@ -34,6 +47,7 @@ models:
 
   - id: Qwen/Qwen2.5-Math-7B-Instruct
     revision: ef9926d75ab1d54532f6a30dd5e760355eb9aa4d
+    source: escolha nossa; especialista usado pelo ToolOrchestra (o SLM-MUX usa DeepSeek-Math-7B-RL, Apêndice E.3)
     params_b: 7.62
     license: apache-2.0
     gated: false
@@ -42,6 +56,7 @@ models:
 
   - id: Qwen/Qwen2.5-Coder-7B-Instruct
     revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
+    source: paper SLM-MUX, especialista de código (Apêndices E.1 e E.3)
     params_b: 7.62
     license: apache-2.0
     gated: false
@@ -50,6 +65,7 @@ models:
 
   - id: Qwen/Qwen3-8B
     revision: b968826d9c46dd6066d109eabc6255188de91218
+    source: labellerr (2026)
     params_b: 8.19
     license: apache-2.0
     gated: false
@@ -58,6 +74,7 @@ models:
 
   - id: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
     revision: 916b56a44061fd5cd7d6a8fb632557ed4f724f60
+    source: labellerr (2026)
     params_b: 7.62
     license: mit
     gated: false
@@ -66,6 +83,7 @@ models:
 
   - id: microsoft/Phi-4-mini-instruct
     revision: cfbefacb99257ffa30c83adab238a50856ac3083
+    source: labellerr (2026)
     params_b: 3.84
     license: mit
     gated: false
@@ -73,6 +91,7 @@ models:
 
   - id: Qwen/Qwen3.5-4B
     revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+    source: vdf (2026), família Qwen3.5 de 0,8 a 9B
     params_b: 4.66
     license: apache-2.0
     gated: false
@@ -81,6 +100,7 @@ models:
 
   - id: Qwen/Qwen3.5-9B
     revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+    source: labellerr (2026); entrou com o teto de 10B
     params_b: 9.65
     license: apache-2.0
     gated: false
@@ -90,6 +110,7 @@ models:
 
   - id: mistralai/Ministral-3-8B-Instruct-2512-BF16
     revision: f6fae9795746f63c9be8344932f01275f3c63734
+    source: vdf (2026); entrou com o teto de 10B
     params_b: 8.92
     license: apache-2.0
     gated: false
@@ -98,6 +119,7 @@ models:
 
   - id: ibm-granite/granite-4.2-8b
     revision: a7042144125ce5ae64f89610e8289647fc000b9a
+    source: vdf (2026); entrou com o teto de 10B
     params_b: 8.79
     license: apache-2.0
     gated: false
@@ -106,6 +128,7 @@ models:
 
   - id: google/gemma-4-E4B-it
     revision: 4ecc2ba63bcac23ba4a767fc87025b1450f84c9c
+    source: labellerr (2026)
     params_b: 8.00
     license: apache-2.0
     gated: false
