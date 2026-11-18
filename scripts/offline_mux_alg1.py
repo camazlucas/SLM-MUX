@@ -13,7 +13,8 @@ próprio conjunto de teste e compara a referência sem normalizar. Aqui:
   4. Repete por T rodadas de Monte Carlo e reporta média ± desvio.
 
 Também calcula, com as mesmas amostras sorteadas:
-  - single: acurácia de 1 amostra de cada modelo (temperatura 0,3, não greedy)
+  - greedy: acurácia greedy de cada modelo (o Single-Best do paper; opcional, --greedy-dir)
+  - single: acurácia de 1 amostra de cada modelo (temperatura 0,3)
   - SC@k:   self-consistency de cada modelo (o Single-Best-SC do paper)
   - oracle: alguma das respostas majoritárias dos modelos está certa
 e o custo em tokens por questão de cada método.
@@ -21,6 +22,7 @@ e o custo em tokens por questão de cada método.
 Uso:
   python scripts/offline_mux_alg1.py \
       --test-dir results/gsm8k_test --val-dir results/gsm8k_val \
+      --greedy-dir results/gsm8k_test_greedy \
       --models meta-llama/Llama-3.1-8B-Instruct,Qwen/Qwen2.5-7B-Instruct \
       --samples 3 --trials 10
 """
@@ -56,7 +58,12 @@ def load(path):
 
 
 def per_sample_accuracy(qdata):
-    """Acurácia média de uma amostra isolada (usada como acurácia de validação)."""
+    """Acurácia média de uma amostra isolada.
+
+    Na validação (9 amostras a temperatura 0,5, Seção 4.3 do paper) é a acurácia
+    usada no desempate. O paper não dá a fórmula; a média sobre as 9 amostras é
+    a leitura direta de "repetir 3 vezes para estimativas estáveis".
+    """
     hits = total = 0
     for d in qdata.values():
         for a in d["answers"]:
@@ -73,6 +80,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--test-dir", required=True)
     ap.add_argument("--val-dir", required=True)
+    ap.add_argument("--greedy-dir", default="", help="coleta greedy do teste (opcional)")
     ap.add_argument("--models", required=True, help="IDs separados por vírgula, na ordem de desempate final")
     ap.add_argument("--samples", type=int, default=3)
     ap.add_argument("--trials", type=int, default=10)
@@ -127,10 +135,20 @@ def main():
         for key in acc:
             acc[key].append(hit[key] / len(questions))
 
+    if args.greedy_dir:
+        for m in models:
+            g = load(model_file(args.greedy_dir, m))
+            qs = [q for q in questions if q in g]
+            hits = sum(int(bool(g[q]["answers"][0]) and g[q]["answers"][0] == g[q]["ref"]) for q in qs)
+            acc[f"greedy::{m}"] = [hits / len(qs)] * args.trials
+            toks[f"greedy::{m}"] = sum(g[q]["prompt_toks"][0] + g[q]["compl_toks"][0] for q in qs) / len(qs)
+
     nq_total = len(questions) * args.trials
     tok_per_q = {m: toks[m] / nq_total for m in models}  # k amostras de um modelo
     tok_cost = {"mux": sum(tok_per_q.values()), "oracle": sum(tok_per_q.values())}
     for m in models:
+        if f"greedy::{m}" in toks:
+            tok_cost[f"greedy::{m}"] = toks[f"greedy::{m}"]
         tok_cost[f"single::{m}"] = tok_per_q[m] / k
         tok_cost[f"sc{k}::{m}"] = tok_per_q[m]
 
