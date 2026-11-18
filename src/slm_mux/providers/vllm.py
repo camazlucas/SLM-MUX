@@ -184,14 +184,23 @@ class VLLMProvider(ProviderBase):
     ) -> GenerationResult:
         """Issue one HTTP POST to the vLLM server."""
         _base_url, chat_url = self._resolve_endpoint(model_name)
+        entry = self._registry.get(model_name) or {}
 
+        # [repro-gsm8k-8b] campos opcionais do registro, por modelo:
+        #   served_model         -> nome servido pelo vLLM (variantes do mesmo modelo, ex.: Qwen3-8B-thinking)
+        #   chat_template_kwargs -> repassado ao template de chat (ex.: enable_thinking)
+        #   max_tokens           -> substitui o max_tokens da coleta para este modelo
         payload: Dict[str, Any] = {
-            "model": model_name,
+            "model": entry.get("served_model", model_name),
             "messages": messages,
             "temperature": float(temperature),
         }
+        if entry.get("max_tokens"):
+            max_tokens = int(entry["max_tokens"])
         if isinstance(max_tokens, int) and max_tokens > 0:
             payload["max_tokens"] = max_tokens
+        if entry.get("chat_template_kwargs"):
+            payload["chat_template_kwargs"] = dict(entry["chat_template_kwargs"])
         if n > 1:
             payload["n"] = n
         if top_p is not None:
