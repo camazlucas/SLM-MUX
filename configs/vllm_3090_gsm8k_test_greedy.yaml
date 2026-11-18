@@ -21,6 +21,8 @@ models:
     provider: vllm_local
   - id: "Qwen/Qwen3-8B"
     provider: vllm_local
+  - id: "Qwen/Qwen3-8B-thinking"
+    provider: vllm_local
   - id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
     provider: vllm_local
   - id: "microsoft/Phi-4-mini-instruct"
@@ -35,7 +37,6 @@ models:
     provider: vllm_local
   - id: "google/gemma-4-E4B-it"
     provider: vllm_local
-
 confidence:
   method: consistency
   params:
