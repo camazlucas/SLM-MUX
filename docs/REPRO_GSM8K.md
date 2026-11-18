@@ -20,7 +20,8 @@ dupla está no MATH-500 (Tabela 2) — próximo passo.
 ## Pool de modelos
 
 `configs/model_pool.yaml` lista 12 modelos de até 10B com a revisão do Hugging Face fixada
-(conferida em 2026-11-16). `scripts/serve_vllm.sh` lê esse arquivo e sobe o modelo nessa revisão,
+(conferida em 2026-11-16) e o campo `source` dizendo de onde cada modelo veio (paper do
+SLM-MUX, ToolOrchestra ou comparações de SLMs de 2026). `scripts/serve_vllm.sh` lê esse arquivo e sobe o modelo nessa revisão,
 com a fração de memória da GPU definida para ele.
 
 | Grupo | Modelos |
