@@ -1,4 +1,4 @@
-# SLM-MUX no GSM8K (val) com vLLM local numa RTX 3090.
+# SLM-MUX no GSM8K (validação, 500 questões do treino) com vLLM local numa RTX 3090.
 # Os dois modelos usam a mesma porta: sobe um, coleta, derruba, sobe o outro.
 # Copie configs/vllm_servers.example.json para slurm/vllm_servers.json antes de rodar.
 
@@ -48,8 +48,10 @@ benchmark:
   seed: 42
 
 mux:
-  samples_per_model: 5   # coleta 5; a combinação subamostra k=3 (Seção 4.2 do paper)
-  temperature: 0.3
+  # Validação como na Seção 4.3 do paper: 3 gerações por modelo, repetidas 3 vezes
+  # (= 9 amostras), temperatura 0,5. Serve só para a acurácia de desempate.
+  samples_per_model: 9
+  temperature: 0.5
   max_tokens: 2048
   tie_breaker: validation_accuracy
   num_workers: 32        # requisições simultâneas; o vLLM agrupa em batch
