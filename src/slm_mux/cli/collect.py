@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Dict, List
@@ -130,6 +131,7 @@ def _collect_for_model(
                 "model_response": result.content,
                 "extracted_answer": extracted,
                 "token_usage": dict(result.token_usage),
+                "latency_s": round(getattr(result, "latency_s", 0.0), 4),
                 "is_correct": benchmark.check_correct(extracted, item.reference_answer),
             })
 
@@ -154,6 +156,9 @@ def _collect_for_model(
             rec["choices"] = item.choices
         return rec
 
+    # [repro-gsm8k-8b] tempo de parede da coleta inteira: a GPU fica dedicada a este modelo,
+    # então é o tempo de GPU gasto. Cruzado com o log de scripts/monitor_gpu.py pela janela start-end.
+    t_start = time.time()
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = [executor.submit(process_one, item) for item in items]
         pbar = tqdm(
@@ -169,6 +174,7 @@ def _collect_for_model(
             pbar.update(1)
         pbar.close()
 
+    t_end = time.time()
     correct_count = sum(1 for r in results if r["aggregation"].get("is_correct"))
     total_count = len(results)
     for r in results:
@@ -185,6 +191,13 @@ def _collect_for_model(
         "correct_count": correct_count,
         "token_usage": total_usage,
         "num_samples": num_samples,
+        "timing": {
+            "start_unix": t_start,
+            "end_unix": t_end,
+            "wall_s": t_end - t_start,
+            "num_workers": num_workers,
+            "num_requests": sum(len(r["samples"]) for r in results),
+        },
         "responses": results,
     }
 
@@ -192,6 +205,7 @@ def _collect_for_model(
 def run_collect(args):
     """Entry point for `slm-mux collect`."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # [repro-gsm8k-8b] uma linha por requisição é ruído
 
     config = load_config(args.config)
 
