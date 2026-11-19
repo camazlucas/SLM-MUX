@@ -29,7 +29,7 @@ com a fração de memória da GPU definida para ele.
 | paper (Reprodução 1) | Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct |
 | especialista | Qwen2.5-Math-7B-Instruct, Qwen2.5-Coder-7B-Instruct |
 | nova geração | Qwen3-8B, com raciocínio desligado (`enable_thinking: false`) |
-| raciocínio | DeepSeek-R1-Distill-Qwen-7B; `Qwen/Qwen3-8B-thinking`, variante do Qwen3-8B com raciocínio ligado (contexto de 32.768, sem coleta greedy) |
+| raciocínio | DeepSeek-R1-Distill-Qwen-7B (sem system prompt, contexto de 32.768, sem coleta greedy); `Qwen/Qwen3-8B-thinking`, variante do Qwen3-8B com raciocínio ligado (contexto de 32.768, sem coleta greedy) |
 | pequeno | Phi-4-mini-instruct (3,8B), Qwen3.5-4B, Gemma 4 E4B (~4,5B efetivos) |
 | teto 10B | Qwen3.5-9B, Ministral-3-8B (BF16), Granite 4.2 8B |
 
@@ -66,9 +66,14 @@ python scripts/prepare_gsm8k.py                 # -> data/gsm8k_test.json, data/
 mkdir -p slurm && cp configs/vllm_servers.example.json slurm/vllm_servers.json
 ```
 
-Para cada modelo (use `tmux`: uma janela serve, outra coleta):
+Para cada modelo, use `tmux` com três janelas. O monitor fica ligado durante toda a sessão e
+grava VRAM, uso da GPU, energia e cache KV a cada segundo; o tempo de carga de cada modelo também
+sai desse log.
 
 ```bash
+# janela 0 (antes de subir o primeiro modelo; Ctrl+C só no fim da sessão)
+python scripts/monitor_gpu.py --port 8000 --out results/gpu_log.csv
+
 # janela 1 (sobe na revisão fixada; 3º argumento opcional = max_model_len)
 bash scripts/serve_vllm.sh Qwen/Qwen2.5-7B-Instruct
 
@@ -86,6 +91,18 @@ resposta extraída e tokens de cada amostra.
 
 Antes da coleta completa, faça um teste de fumaça: `sample_size: 20` no config de validação,
 colete com um modelo e confira nas respostas brutas se o `####` aparece. Depois volte para `-1`.
+
+## Custo de cada coleta
+
+```bash
+python scripts/summarize_gpu.py --log results/gpu_log.csv \
+  --runs results/gsm8k_val results/gsm8k_test results/gsm8k_test_greedy
+```
+
+Por coleta: tempo de GPU (a GPU fica dedicada a um modelo, então é o tempo de parede da coleta),
+segundos por questão, tokens de entrada e saída, tokens/s, latência média, pico e média do cache KV,
+uso médio da GPU e energia (Wh). A VRAM usada fica quase constante porque o vLLM reserva de saída a
+fração pedida; o que diferencia os modelos é o tamanho dos pesos e o pico do cache KV.
 
 ## Combinação (Algoritmo 1) e baselines
 
@@ -109,7 +126,11 @@ Reporta, com média ± desvio em 10 rodadas de Monte Carlo (subamostrando 3 das 
    `ValidationAccuracyTieBreaker` do próprio repositório, com acurácia da validação.
    O `slm-mux run` implementa o Algoritmo 1, mas exige os dois modelos servidos ao mesmo tempo.
 2. **Extrator do GSM8K** (`src/slm_mux/extractors/gsm.py`): aceita separador de milhar e `$`
-   (o original lia `#### 1,000` como `1`) e trata `18.00` como `18`.
+   (o original lia `#### 1,000` como `1`), trata `18.00` como `18` e, sem `####`, procura `\boxed{}`
+   antes de cair no último número (modelos de raciocínio costumam usar `\boxed{}`).
+6. **DeepSeek-R1-Distill sem system prompt**, como pede o model card: o provider junta o system
+   prompt ao prompt do usuário só para ele (`merge_system_into_user`). O teste a 0,3 fica fora da
+   faixa recomendada (0,5-0,7); se o teste de fumaça mostrar repetição sem fim, passa para 0,6.
 3. **Dados**: o repositório não traz script de preparo; `scripts/prepare_gsm8k.py` grava só o
    número final em `answer`.
 4. **Acurácia de validação** = acurácia média das 9 amostras (3 × 3 a temperatura 0,5) nas 500
