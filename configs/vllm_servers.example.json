@@ -39,7 +39,9 @@
   "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
     "host": "localhost",
     "port": 8000,
-    "served_model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+    "served_model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    "max_tokens": 30000,
+    "merge_system_into_user": true
   },
   "microsoft/Phi-4-mini-instruct": {
     "host": "localhost",

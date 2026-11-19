@@ -24,6 +24,7 @@
 #   max_model_len          -> contexto do servidor (padrão 4096)
 #   max_tokens             -> substitui o max_tokens do config da coleta para este modelo
 #   gpu_memory_utilization -> fração da VRAM reservada (padrão 0.90)
+#   merge_system_into_user -> junta o system prompt ao prompt do usuário (modelos que pedem sem system prompt)
 #
 # Grupos:
 #   paper       -> a dupla usada na Reprodução 1 (SLM-MUX reporta Llama-8B + Qwen-7B no MATH)
@@ -101,7 +102,13 @@ models:
     license: mit
     gated: false
     group: raciocinio
-    notes: respostas longas; precisa de max_tokens e max-model-len maiores
+    merge_system_into_user: true
+    max_model_len: 32768
+    max_tokens: 30000
+    notes: >-
+      o model card pede sem system prompt (instruções vão no prompt do usuário), até 32.768 tokens
+      e temperatura 0,5-0,7; o teste a 0,3 fica fora dessa faixa e será conferido no teste de
+      fumaça (se repetir sem fim, passa para 0,6 como desvio); não coletar o greedy
 
   - id: microsoft/Phi-4-mini-instruct
     revision: cfbefacb99257ffa30c83adab238a50856ac3083
