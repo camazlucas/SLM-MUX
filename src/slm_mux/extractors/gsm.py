@@ -26,6 +26,19 @@ def extract_answer_gsm(text: str) -> str:
     matches = list(re.finditer(r"####\s*\$?\s*(" + num + r")", text))
     if matches:
         return matches[-1].group(1)
+    # [repro-gsm8k-8b] modelos de raciocínio (ex.: DeepSeek-R1-Distill) tendem a usar \boxed{}
+    boxed = []
+    for start in [m.end() for m in re.finditer(r"\\boxed\{", text)]:
+        depth, i = 1, start
+        while i < len(text) and depth:
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            i += 1
+        if depth == 0:
+            boxed.append(text[start:i - 1])
+    for content in reversed(boxed):
+        inner = re.findall(num, content)
+        if inner:
+            return inner[-1]
     # Fallback: last standalone number
     nums = re.findall(num, text)
     return nums[-1] if nums else ""
