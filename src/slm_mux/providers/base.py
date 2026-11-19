@@ -20,6 +20,7 @@ class GenerationResult:
     )
     logprobs: Optional[List[Dict[str, Any]]] = None
     raw_response: Optional[Any] = None
+    latency_s: float = 0.0  # [repro-gsm8k-8b] tempo de parede da requisição (envio -> resposta)
 
     # ------------------------------------------------------------------
     # Convenience helpers

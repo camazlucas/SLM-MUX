@@ -9,6 +9,7 @@ expose an OpenAI-compatible ``/v1/chat/completions`` endpoint.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -190,6 +191,13 @@ class VLLMProvider(ProviderBase):
         #   served_model         -> nome servido pelo vLLM (variantes do mesmo modelo, ex.: Qwen3-8B-thinking)
         #   chat_template_kwargs -> repassado ao template de chat (ex.: enable_thinking)
         #   max_tokens           -> substitui o max_tokens da coleta para este modelo
+        #   merge_system_into_user -> junta o system prompt ao primeiro prompt do usuário
+        if entry.get("merge_system_into_user"):
+            system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
+            rest = [dict(m) for m in messages if m.get("role") != "system"]
+            if system and rest and rest[0].get("role") == "user":
+                rest[0]["content"] = system + "\n\n" + rest[0]["content"]
+                messages = rest
         payload: Dict[str, Any] = {
             "model": entry.get("served_model", model_name),
             "messages": messages,
@@ -216,6 +224,7 @@ class VLLMProvider(ProviderBase):
 
         if self._concurrency is not None:
             self._concurrency.acquire()
+        t0 = time.perf_counter()
         try:
             resp = httpx.post(
                 chat_url,
@@ -270,6 +279,7 @@ class VLLMProvider(ProviderBase):
             reasoning="",
             token_usage=token_usage,
             logprobs=raw_logprobs,
+            latency_s=time.perf_counter() - t0,
         )
 
     # ------------------------------------------------------------------
